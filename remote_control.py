@@ -1,3 +1,5 @@
+"""Applications that control using remotes."""
+
 import appdaemon.plugins.hass.hassapi as hass
 
 class RemoteControl(hass.Hass):
@@ -21,6 +23,9 @@ class RemoteControl(hass.Hass):
             elif data['event'] == 4002:
                 self.log('Button off')
 
+CONF_MAIN_LIGHT = 0
+CONF_MAX_BRIGHTNESS = 255
+CONF_MIN_BRIGHTNESS = 5
 
 class RemoteControlSelectLight(hass.Hass):
     """Control lights on/off, brightness, together with selecting light to control.
@@ -41,15 +46,27 @@ class RemoteControlSelectLight(hass.Hass):
             self.log('All configuration parameters are not set')
             return False
         self.event = 'deconz_event'
-        self.controlled_light = 0
+        self.controlled_light = CONF_MAIN_LIGHT
         self.select_light_handle = None
         self.listen_event(self.handle_event, self.event)
 
     def handle_event(self, event_name, data, kwargs):
-        """Triggers action based on what button event is received."""
+        """Triggers action based on what button event is received.
+
+        1001: Long press power button.
+        1002: Short press power button.
+        2001: Long press dim up button.
+        2002: Short press dim up button.
+        3001: Long press dim down button.
+        3002: Short press dim down button.
+        4001: Long press left arrow.
+        4002: Short press left arrow.
+        5001: Long press right arrow.
+        5002: Short press right arrow.
+        """
         if data['id'] == self.remote:
             if data['event'] == 1001:  # Toggle main device on/off
-                self.toggle(self.lights[0])
+                self.toggle(self.lights[CONF_MAIN_LIGHT])
             elif data['event'] == 1002:  # Toggle select device on/off
                 self.toggle(self.lights[self.controlled_light])
             elif data['event'] == 2001:  # Dim up to max
@@ -77,34 +94,35 @@ class RemoteControlSelectLight(hass.Hass):
                 self.lights[self.controlled_light], attribute='brightness') + dim
         except TypeError:  # If light is off brightness is None
             if dim > 0:
-                brightness = 255
+                brightness = CONF_MAX_BRIGHTNESS
             else:
-                brightness = 5
-        if brightness > 255:
-          brightness = 255
-        elif brightness < 0:
-          brightness = 5
+                brightness = CONF_MIN_BRIGHTNESS
+        if brightness > CONF_MAX_BRIGHTNESS:
+          brightness = CONF_MAX_BRIGHTNESS
+        elif brightness < CONF_MIN_BRIGHTNESS:
+          brightness = CONF_MIN_BRIGHTNESS
         self.turn_on(self.lights[self.controlled_light], brightness=brightness)
         self.log('Setting brightness to {}'.format(brightness))
 
 
-    def select_light(self, select):
+    def select_light(self, light_index = CONF_MAIN_LIGHT, flash = True):
         """Select which device to control.
 
         Feedback to user by doing a single flash of selected light.
         Reverts back to main light after 30 seconds of inactivity.
         """
         length = len(self.lights)
-        if select == length:
-            select = 0
-        elif select < 0:
-            select = length - 1
-        self.controlled_light = select
-        self.turn_on(self.lights[self.controlled_light], flash='short')
+        if light_index == length:
+            light_index = 0
+        elif light_index < 0:
+            light_index = length - 1
+        self.controlled_light = light_index
+        if flash:
+            self.turn_on(self.lights[self.controlled_light], flash='short')
         if self.select_light_handle:
             self.cancel_timer(self.select_light_handle)
-        if self.controlled_light != 0:
-            self.select_light_handle = self.run_in(self.set_main_light, 30)
+        if self.controlled_light != CONF_MAIN_LIGHT:
+            self.select_light_handle = self.run_in(self.set_main_light, 15)
         self.log('Select light {}'.format(self.lights[self.controlled_light]))
 
     def set_main_light(self, kwargs):
@@ -112,4 +130,4 @@ class RemoteControlSelectLight(hass.Hass):
 
         Used by select_device timer to revert to main device.
         """
-        self.controlled_light = 0
+        self.select_light(flash=False)
