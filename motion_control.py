@@ -11,7 +11,8 @@ class MotionControlLights(hass.Hass):
     Arguments:
         delay {int} -- Time [s] before turning lights back off, default is 90.
         sensor {string} -- Binary sensor that will trigger lights to go on.
-        lights {list} -- List of lights entity ids.
+        lights {list} -- Light entity ids, first light is main light.
+        lightlevel {dict} -- Keys is max light level and value is sensor
     """
 
 
@@ -20,6 +21,8 @@ class MotionControlLights(hass.Hass):
         self.delay = self.args.get('delay', 90)
         self.sensor = self.args.get('sensor')
         self.lights = self.args.get('light')
+        self.lightlevel = self.args.get('lightlevel', {})
+        print(self.lightlevel)
         if not all([self.sensor, self.lights]):
             self.log('All configuration parameters are not set')
             return False
@@ -32,7 +35,7 @@ class MotionControlLights(hass.Hass):
         """"""
         if new == 'on':
             self.log("{} triggered".format(entity))
-            if not self.lights_to_turn_off:  # Motion is already active
+            if not self.lights_to_turn_off and self.within_limits():  # Motion is already active
                 self.light_on()
             if self.light_off_handle is not None:
                 self.cancel_timer(self.light_off_handle)
@@ -63,3 +66,16 @@ class MotionControlLights(hass.Hass):
                 self.log('Turning off {}'.format(light))
                 self.turn_off(light)
         self.lights_to_turn_off = []
+
+    def within_limits(self):
+        """Check that light level sensors are within limits."""
+        within_limit = True
+
+        for lux_sensor, limit in self.lightlevel.items():
+            current_lightlevel = float(self.get_state(lux_sensor))
+            if current_lightlevel > limit:
+                within_limit = False
+                self.log('Light level beyond limit')
+                break
+
+        return within_limit
