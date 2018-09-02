@@ -22,7 +22,6 @@ class MotionControlLights(hass.Hass):
         self.sensor = self.args.get('sensor')
         self.lights = self.args.get('light')
         self.lightlevel = self.args.get('lightlevel', {})
-        print(self.lightlevel)
         if not all([self.sensor, self.lights]):
             self.log('All configuration parameters are not set')
             return False

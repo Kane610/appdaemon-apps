@@ -42,9 +42,11 @@ class RemoteControlSelectLight(hass.Hass):
         """Set up remote and lights."""
         self.remote = self.args.get('remote')
         self.lights = self.args.get('light')
+
         if not all([self.remote, self.lights]):
             self.log('All configuration parameters are not set')
             return False
+
         self.event = 'deconz_event'
         self.controlled_light = CONF_MAIN_LIGHT
         self.select_light_handle = None
@@ -65,22 +67,31 @@ class RemoteControlSelectLight(hass.Hass):
         5002: Short press right arrow.
         """
         if data['id'] == self.remote:
+
             if data['event'] == 1001:  # Toggle main device on/off
                 self.toggle(self.lights[CONF_MAIN_LIGHT])
+
             elif data['event'] == 1002:  # Toggle select device on/off
                 self.toggle(self.lights[self.controlled_light])
+
             elif data['event'] == 2001:  # Dim up to max
                 self.set_brightness(+255)
+
             elif data['event'] == 2002:  # Dim up 25
                 self.set_brightness(+25)
+
             elif data['event'] == 3001:  # Dim down to min
                 self.set_brightness(-255)
+
             elif data['event'] == 3002:  # Dim down 25
                 self.set_brightness(-25)
+
             elif data['event'] in [4001, 5001]:  # Go back to main device
                 self.select_light(0)
+
             elif data['event'] == 4002:  # Select previous device
                 self.select_light(self.controlled_light - 1)
+
             elif data['event'] == 5002:  # Select next device
                 self.select_light(self.controlled_light + 1)
 
@@ -92,16 +103,21 @@ class RemoteControlSelectLight(hass.Hass):
         try:
             brightness = self.get_state(
                 self.lights[self.controlled_light], attribute='brightness') + dim
+
         except TypeError:  # If light is off brightness is None
             if dim > 0:
                 brightness = CONF_MAX_BRIGHTNESS
             else:
                 brightness = CONF_MIN_BRIGHTNESS
+
         if brightness > CONF_MAX_BRIGHTNESS:
           brightness = CONF_MAX_BRIGHTNESS
+
         elif brightness < CONF_MIN_BRIGHTNESS:
           brightness = CONF_MIN_BRIGHTNESS
+
         self.turn_on(self.lights[self.controlled_light], brightness=brightness)
+
         self.log('Setting brightness to {}'.format(brightness))
 
 
@@ -111,18 +127,18 @@ class RemoteControlSelectLight(hass.Hass):
         Feedback to user by doing a single flash of selected light.
         Reverts back to main light after 30 seconds of inactivity.
         """
-        length = len(self.lights)
-        if light_index == length:
-            light_index = 0
-        elif light_index < 0:
-            light_index = length - 1
+        light_index = light_index % len(self.lights)
+
         self.controlled_light = light_index
         if flash:
             self.turn_on(self.lights[self.controlled_light], flash='short')
+
         if self.select_light_handle:
             self.cancel_timer(self.select_light_handle)
+
         if self.controlled_light != CONF_MAIN_LIGHT:
             self.select_light_handle = self.run_in(self.set_main_light, 15)
+
         self.log('Select light {}'.format(self.lights[self.controlled_light]))
 
     def set_main_light(self, kwargs):
