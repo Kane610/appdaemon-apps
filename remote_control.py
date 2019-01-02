@@ -23,6 +23,88 @@ class RemoteControl(hass.Hass):
             elif data['event'] == 4002:
                 self.log('Button off')
 
+
+class RemoteControlSecondary(hass.Hass):
+    """Secondary control to a Zigbee group.
+
+    Designed for deCONZ events.
+    Logics are built around the Hue Dimmer remote control.
+    Control second group of lights with long press.
+    Arguments:
+        remote -- slugified version of entity name.
+        light -- List of lights, first light is considered main device.
+    """
+
+    def initialize(self):
+        """Set up remote and lights."""
+        self.remotes = self.args.get('remotes')
+        self.lights = self.args.get('light')
+
+        if not all([self.remotes, self.lights]):
+            self.log("All configuration parameters are not set")
+            self.log("Remotes: {}".format(self.remotes))
+            self.log("Lights: {}".format(self.lights))
+            return False
+
+        self.event = 'deconz_event'
+        self.listen_event(self.handle_event, self.event)
+
+    def handle_event(self, event_name, data, kwargs):
+        """
+        1001: Long press power on button.
+        2001: Long press dim up button.
+        3001: Long press dim down button.
+        4001: Long press power off button.
+        """
+        if data['id'] in self.remotes:
+            self.log(data)
+
+            if data['event'] == 1001:
+                self.turn_light('on')
+
+            elif data['event'] in [2000, 2001]:
+                self.set_brightness(+40)
+
+            elif data['event'] in [3000, 3001]:
+                self.set_brightness(-40)
+
+            elif data['event'] == 4001:
+                self.turn_light("off")
+
+    def turn_light(self, action):
+        """Turn on or off lights."""
+        for light in self.lights:
+            self.call_service('light/turn_'+action, entity_id=light)
+        self.log("Turn {action} lights {light}".format(
+            action=action, light=self.lights))
+
+    def set_brightness(self, dim):
+        """Set brightness of device.
+
+        If light is off set to maximum or minimum brightness based on button.
+        """
+        for light in self.lights:
+            try:
+                brightness = self.get_state(light, attribute='brightness') + dim
+
+            except TypeError:  # If light is off brightness is None
+                return False
+                if dim > 0:
+                    brightness = CONF_MAX_BRIGHTNESS
+                else:
+                    brightness = CONF_MIN_BRIGHTNESS
+
+            if brightness > CONF_MAX_BRIGHTNESS:
+                brightness = CONF_MAX_BRIGHTNESS
+
+            elif brightness < CONF_MIN_BRIGHTNESS:
+                brightness = CONF_MIN_BRIGHTNESS
+
+            self.turn_on(light, brightness=brightness)
+
+            self.log("Setting brightness to {}".format(brightness))
+
+
 CONF_MAIN_LIGHT = 0
 CONF_MAX_BRIGHTNESS = 255
 CONF_MIN_BRIGHTNESS = 5
@@ -44,7 +126,7 @@ class RemoteControlSelectLight(hass.Hass):
         self.lights = self.args.get('light')
 
         if not all([self.remote, self.lights]):
-            self.log('All configuration parameters are not set')
+            self.log("All configuration parameters are not set")
             return False
 
         self.event = 'deconz_event'
@@ -118,7 +200,7 @@ class RemoteControlSelectLight(hass.Hass):
 
         self.turn_on(self.lights[self.controlled_light], brightness=brightness)
 
-        self.log('Setting brightness to {}'.format(brightness))
+        self.log("Setting brightness to {}".format(brightness))
 
 
     def select_light(self, light_index = CONF_MAIN_LIGHT, flash = True):
@@ -139,7 +221,7 @@ class RemoteControlSelectLight(hass.Hass):
         if self.controlled_light != CONF_MAIN_LIGHT:
             self.select_light_handle = self.run_in(self.set_main_light, 15)
 
-        self.log('Select light {}'.format(self.lights[self.controlled_light]))
+        self.log("Select light {}".format(self.lights[self.controlled_light]))
 
     def set_main_light(self, kwargs):
         """Set controlled light back to main light.
