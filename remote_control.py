@@ -11,6 +11,12 @@ BUTTON_RELEASE = 2
 BUTTON_LONG_PRESS = 1
 BUTTON_LONG_RELEASE = 3
 
+BUTTON_1 = 1
+BUTTON_2 = 2
+BUTTON_3 = 3
+BUTTON_4 = 4
+BUTTON_5 = 5
+
 
 class RemoteControl(RemoteControlBase):
     """"""
@@ -59,10 +65,10 @@ remote_control_living_room:
       - light.ambience_spot_9
     """
 
-    POWER_ON = 1000
-    DIM_UP = 2000
-    DIM_DOWN = 3000
-    POWER_OFF = 4000
+    POWER_ON = BUTTON_1 * 1000
+    DIM_UP = BUTTON_2 * 1000
+    DIM_DOWN = BUTTON_3 * 1000
+    POWER_OFF = BUTTON_4 * 1000
 
     # MAPPING = {
     #     1
@@ -80,10 +86,10 @@ remote_control_living_room:
             self.log('POWER ON PRESSED')
         elif button_event == self.POWER_ON + BUTTON_RELEASE:
             self.log('POWER ON RELEASED, check multi click')
-            self.turn_multi_click('on')
+            self.turn_click('on')
         elif button_event == self.POWER_ON + BUTTON_LONG_PRESS:
             self.log('POWER ON LONG PRESS, check long press')
-            self.turn_long_press('on')
+            self.turn_hold('on')
         elif button_event == self.POWER_ON + BUTTON_LONG_RELEASE:
             self.log('POWER ON LONG RELEASE')
 
@@ -91,8 +97,10 @@ remote_control_living_room:
             self.log('DIM UP PRESSED')
         elif button_event == self.DIM_UP + BUTTON_RELEASE:
             self.log('DIM UP RELEASED, check multi click')
+            self.set_brightness_all_lights(+40)
         elif button_event == self.DIM_UP + BUTTON_LONG_PRESS:
             self.log('DIM UP LONG PRESS, check long press')
+            self.set_brightness_all_lights(+40)
         elif button_event == self.DIM_UP + BUTTON_LONG_RELEASE:
             self.log('DIM UP LONG RELEASE')
 
@@ -100,8 +108,10 @@ remote_control_living_room:
             self.log('DIM DOWN PRESSED')
         elif button_event == self.DIM_DOWN + BUTTON_RELEASE:
             self.log('DIM DOWN RELEASED, check multi click')
+            self.set_brightness_all_lights(-40)
         elif button_event == self.DIM_DOWN + BUTTON_LONG_PRESS:
             self.log('DIM DOWN LONG PRESS, check long press')
+            self.set_brightness_all_lights(-40)
         elif button_event == self.DIM_DOWN + BUTTON_LONG_RELEASE:
             self.log('DIM DOWN LONG RELEASE')
 
@@ -109,37 +119,12 @@ remote_control_living_room:
             self.log('POWER OFF PRESSED')
         elif button_event == self.POWER_OFF + BUTTON_RELEASE:
             self.log('POWER OFF, check multi click')
-            self.turn_multi_click('off')
+            self.turn_click('off')
         elif button_event == self.POWER_OFF + BUTTON_LONG_PRESS:
             self.log('POWER OFF PRESS, check long press')
-            self.turn_long_press('off')
+            self.turn_hold('off')
         elif button_event == self.POWER_OFF + BUTTON_LONG_RELEASE:
             self.log('POWER OFF LONG RELEASE')
-
-
-class RemoteControlSecondary(RemoteControlBase):
-    """Secondary control to a Zigbee group.
-
-    Logics are built around the Hue Dimmer remote control.
-    Control second group of lights with long press.
-    Arguments:
-        remote -- slugified version of entity name.
-        light -- List of lights, first light is considered main device.
-    """
-
-    def handle_button_event(self):
-        """"""
-        if self.button_event == 1001:
-            self.turn_devices('on')
-
-        elif self.button_event in [2000, 2001]:
-            self.set_brightness(+40)
-
-        elif self.button_event in [3000, 3001]:
-            self.set_brightness(-40)
-
-        elif self.button_event == 4001:
-            self.turn_devices("off")
 
 
 class RemoteControlSelectLight(RemoteControlBase):
@@ -200,38 +185,67 @@ class RemoteControlSelectLight(RemoteControlBase):
 class RemoteControlBase(hass.Hass):
     """[summary]
 
-    Returns:
-        [type] -- [description]
+    [remote] -- [description]
+    [remotes] -- [description]
+    [click] -- [description]
+    [hold] -- [description]
+    [primary] -- [description]
+    [secondary] -- [description]
+    [dim_all_lights] -- Boolean [description]
     """
 
     def initialize(self):
         """Set up remotes and lights."""
         self.log(self.args)
 
-        self.lights = self.args.get('light', True)
-        self.long_press = self.args.get('long_press')
-        self.multi_click = self.args.get('multi_click')
-
         self.remotes = self.args.get('remotes')
         if not self.remotes:
             self.remotes = [self.args.get('remote')]
 
+        # self.lights = self.args.get('light', True)
+
+        self.click = self.args.get('click', dict())
+        if 1 not in self.click and 'primary' in self.args:
+            self.click[1] = self.args.get('primary')
+
+        self.hold = self.args.get('hold', dict())
+        if 1 not in self.hold and 'secondary' in self.args:
+            self.hold[1] = self.args.get('secondary')
+
+        self.dim_all_lights = self.args.get('dim_all_lights', False)
+
+        self.lights = [
+            light
+            for lights in self.click.values()
+            for light in lights
+            if light.startswith('light.')
+        ] + [
+            light
+            for lights in self.hold.values()
+            for light in lights
+            if light.startswith('light.')
+        ]
+
         self.controlled_device_index = CONF_MAIN_DEVICE
         self.select_device_handle = None
-
-        self.event = 'deconz_event'
-        self.listen_event(self.handle_event, self.event)
 
         self.button_event = None
         self.button_timer = None
         self.button_counters = {}
+
+        self.listen_event(self.handle_event, 'deconz_event')
 
     def handle_event(self, event_name, data, kwargs):
         """"""
         remote_id = data['id']
         if remote_id in self.remotes:
             self.log(data)
-            # use button_event / 1000 to check if it is the same button, else reset
+            self.log(self.lights)
+
+            if self.button_id(self.button_event) != self.button_id(data['event']):
+                self.log('RESETTING')
+                self.reset_button_data()
+
             self.button_event = data['event']
 
             if self.button_event not in self.button_counters:
@@ -256,29 +270,24 @@ class RemoteControlBase(hass.Hass):
         self.button_event = None
         self.button_counters = {}
 
-    def turn_long_press(self, action):
+    def turn_click(self, action):
         """"""
-        #self.log("TURN LONG PRESS {} {}".format(self.button_counters, self.long_press))
+        self.turn(action, self.click)
+
+    def turn_hold(self, action):
+        """"""
+        self.turn(action, self.hold)
+
+    def turn(self, action, device_dict):
+        """"""
         button_counter = self.button_counters[self.button_event]
-        if not button_counter in self.long_press:
+        if not button_counter in device_dict:
             return
 
-        for device in self.long_press[button_counter]:
+        for device in device_dict[button_counter]:
             self.call_service('homeassistant/turn_'+action, entity_id=device)
         self.log("Turn {action} device {device}".format(
-            action=action, device=self.long_press[button_counter]))
-
-    def turn_multi_click(self, action):
-        """"""
-        #self.log("TURN LONG PRESS {} {}".format(self.button_counters, self.long_press))
-        button_counter = self.button_counters[self.button_event]
-        if not button_counter in self.multi_click:
-            return
-
-        for device in self.multi_click[button_counter]:
-            self.call_service('homeassistant/turn_'+action, entity_id=device)
-        self.log("Turn {action} device {device}".format(
-            action=action, device=self.multi_click[button_counter]))
+            action=action, device=device_dict[button_counter]))
 
 ### Control state ###
 
@@ -309,6 +318,9 @@ class RemoteControlBase(hass.Hass):
             brightness = self.get_state(light, attribute='brightness') + dim
 
         except TypeError:  # If light is off brightness is None
+            if not self.dim_all_lights:
+                return
+
             if dim > 0:
                 brightness = CONF_MAX_BRIGHTNESS
             else:
@@ -364,3 +376,9 @@ class RemoteControlBase(hass.Hass):
     def select_previous_device(self):
         """Set controlled device to previous in list."""
         self.select_device(self.controlled_device_index - 1)
+
+    def button_id(self, button):
+        """"""
+        if not button:
+            return 0
+        return int(button/1000)
