@@ -79,7 +79,6 @@ remote_control_living_room:
 
     def handle_button_event(self):
         """"""
-        self.log('HANDLE BUTTON EVENT')
         button_event = self.button_event
 
         if button_event == self.POWER_ON + BUTTON_PRESS:
@@ -180,8 +179,6 @@ class RemoteControlSelectLight(RemoteControlBase):
             self.select_next_device()
 
 
-
-
 class RemoteControlBase(hass.Hass):
     """[summary]
 
@@ -201,8 +198,6 @@ class RemoteControlBase(hass.Hass):
         self.remotes = self.args.get('remotes')
         if not self.remotes:
             self.remotes = [self.args.get('remote')]
-
-        # self.lights = self.args.get('light', True)
 
         self.click = self.args.get('click', dict())
         if 1 not in self.click and 'primary' in self.args:
@@ -236,16 +231,13 @@ class RemoteControlBase(hass.Hass):
         self.listen_event(self.handle_event, 'deconz_event')
 
     def handle_event(self, event_name, data, kwargs):
-        """"""
+        """Manage new events.
+
+        Keeps counters for button presses and resets counters on inactivity.
+        """
         remote_id = data['id']
+
         if remote_id in self.remotes:
-            self.log(data)
-            self.log(self.lights)
-
-            if self.button_id(self.button_event) != self.button_id(data['event']):
-                self.log('RESETTING')
-                self.reset_button_data()
-
             self.button_event = data['event']
 
             if self.button_event not in self.button_counters:
@@ -261,25 +253,29 @@ class RemoteControlBase(hass.Hass):
             self.handle_button_event()
 
     def handle_button_event(self):
-        """"""
+        """Remote specific implementation."""
         raise NotImplementedError
 
     def reset_button_data(self, kwargs=None):
-        """"""
-        self.log("Reseting counter for {}".format(self.button_counters))
+        """Resets momentary data after user inactivity."""
         self.button_event = None
         self.button_counters = {}
+        self.select_main_device()
 
     def turn_click(self, action):
-        """"""
+        """Turn on/off devices in click dict."""
         self.turn(action, self.click)
 
     def turn_hold(self, action):
-        """"""
+        """Turn on/off devices in hold dict."""
         self.turn(action, self.hold)
 
     def turn(self, action, device_dict):
-        """"""
+        """Turn on/off devices.
+
+        Called from turn_click or turn_hold.
+        Device_dict is either self.click or self.hold.
+        """
         button_counter = self.button_counters[self.button_event]
         if not button_counter in device_dict:
             return
@@ -289,19 +285,10 @@ class RemoteControlBase(hass.Hass):
         self.log("Turn {action} device {device}".format(
             action=action, device=device_dict[button_counter]))
 
-### Control state ###
-
-    def turn_devices(self, action):
-        """Turn on or off device."""
-        for device in self.lights:
-            self.call_service('homeassistant/turn_'+action, entity_id=device)
-        self.log("Turn {action} device {device}".format(
-            action=action, device=self.lights))
-
 ### Control brightness ###
 
     def set_brightness_controlled_light(self, dim):
-        """Set brightness of device."""
+        """Set brightness of currently controlled device."""
         self.set_brightness(self.controlled_device, dim)
 
     def set_brightness_all_lights(self, dim):
@@ -336,12 +323,28 @@ class RemoteControlBase(hass.Hass):
 
         self.log("Setting brightness to {}".format(brightness))
 
-### Select device logic ###
+### Select and control device logic ###
 
     @property
     def controlled_device(self):
-        """"""
+        """Return the currently controlled device."""
         return self.lights[self.controlled_device_index]
+
+    def select_main_device(self, kwargs={}):
+        """Turn controls back to main device.
+
+        Used by select_device timer to revert to main device.
+        """
+        self.log('select main device')
+        self.select_device(CONF_MAIN_DEVICE, flash=False)
+
+    def select_next_device(self):
+        """Set controlled device to next in list."""
+        self.select_device(self.controlled_device_index + 1)
+
+    def select_previous_device(self):
+        """Set controlled device to previous in list."""
+        self.select_device(self.controlled_device_index - 1)
 
     def select_device(self, device_index, flash=True):
         """Select which device to control.
@@ -354,31 +357,15 @@ class RemoteControlBase(hass.Hass):
         if flash and self.controlled_device.startswith('light.'):
             self.turn_on(self.controlled_device, flash='short')
 
-        if self.select_device_handle:
-            self.cancel_timer(self.select_device_handle)
-
-        if self.controlled_device_index != CONF_MAIN_DEVICE:
-            self.select_device_handle = self.run_in(self.select_main_device, 15)
-
         self.log("Select light {}".format(self.controlled_device))
 
-    def select_main_device(self, kwargs):
-        """Turn controls back to main device.
-
-        Used by select_device timer to revert to main device.
-        """
-        self.select_device(CONF_MAIN_DEVICE, flash=False)
-
-    def select_next_device(self):
-        """Set controlled device to next in list."""
-        self.select_device(self.controlled_device_index + 1)
-
-    def select_previous_device(self):
-        """Set controlled device to previous in list."""
-        self.select_device(self.controlled_device_index - 1)
+### Support methods ###
 
     def button_id(self, button):
-        """"""
+        """Resolves button id from button event.
+
+        1000 equals button id 1.
+        """
         if not button:
             return 0
         return int(button/1000)
