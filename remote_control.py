@@ -18,167 +18,6 @@ BUTTON_4 = 4
 BUTTON_5 = 5
 
 
-class RemoteControl(RemoteControlBase):
-    """"""
-
-    def initialize(self):
-        """"""
-        self.lights = ['light.ambience_spot_5']
-        super().initialize()
-
-    def handle_button_event(self):
-        """"""
-        if self.button_event == 1002:
-            self.log('Button on')
-        elif self.button_event == 2002:
-            self.log('Button dim up')
-        elif self.button_event == 3002:
-            self.log('Button dim down')
-        elif self.button_event == 4002:
-            self.log('Button off')
-
-
-class HueDimmer(RemoteControlBase):
-    """Example config.
-
-remote_control_living_room:
-  module: remote_control
-  class: HueDimmer
-  remotes:
-    - dimmer_switch_5
-  long_press:
-    1:
-      - light.ambience_spot_1
-      - light.ambience_spot_2
-    3:
-      - light.ambience_spot_5
-      - light.ambience_spot_6
-  multi_click:
-    1:
-      - light.ambience_spot_1
-      - light.ambience_spot_2
-    2:
-      - light.ambience_spot_5
-      - light.ambience_spot_6
-    3:
-      - light.ambience_spot_8
-      - light.ambience_spot_9
-    """
-
-    POWER_ON = BUTTON_1 * 1000
-    DIM_UP = BUTTON_2 * 1000
-    DIM_DOWN = BUTTON_3 * 1000
-    POWER_OFF = BUTTON_4 * 1000
-
-    # MAPPING = {
-    #     1
-    # }
-    # def initialize(self):
-    #     """"""
-    #     super().initialize()
-
-    def handle_button_event(self):
-        """"""
-        button_event = self.button_event
-
-        if button_event == self.POWER_ON + BUTTON_PRESS:
-            self.log('POWER ON PRESSED')
-        elif button_event == self.POWER_ON + BUTTON_RELEASE:
-            self.log('POWER ON RELEASED, check multi click')
-            self.turn_click('on')
-        elif button_event == self.POWER_ON + BUTTON_LONG_PRESS:
-            self.log('POWER ON LONG PRESS, check long press')
-            self.turn_hold('on')
-        elif button_event == self.POWER_ON + BUTTON_LONG_RELEASE:
-            self.log('POWER ON LONG RELEASE')
-
-        elif button_event == self.DIM_UP + BUTTON_PRESS:
-            self.log('DIM UP PRESSED')
-        elif button_event == self.DIM_UP + BUTTON_RELEASE:
-            self.log('DIM UP RELEASED, check multi click')
-            self.set_brightness_all_lights(+40)
-        elif button_event == self.DIM_UP + BUTTON_LONG_PRESS:
-            self.log('DIM UP LONG PRESS, check long press')
-            self.set_brightness_all_lights(+40)
-        elif button_event == self.DIM_UP + BUTTON_LONG_RELEASE:
-            self.log('DIM UP LONG RELEASE')
-
-        elif button_event == self.DIM_DOWN + BUTTON_PRESS:
-            self.log('DIM DOWN PRESSED')
-        elif button_event == self.DIM_DOWN + BUTTON_RELEASE:
-            self.log('DIM DOWN RELEASED, check multi click')
-            self.set_brightness_all_lights(-40)
-        elif button_event == self.DIM_DOWN + BUTTON_LONG_PRESS:
-            self.log('DIM DOWN LONG PRESS, check long press')
-            self.set_brightness_all_lights(-40)
-        elif button_event == self.DIM_DOWN + BUTTON_LONG_RELEASE:
-            self.log('DIM DOWN LONG RELEASE')
-
-        elif button_event == self.POWER_OFF + BUTTON_PRESS:
-            self.log('POWER OFF PRESSED')
-        elif button_event == self.POWER_OFF + BUTTON_RELEASE:
-            self.log('POWER OFF, check multi click')
-            self.turn_click('off')
-        elif button_event == self.POWER_OFF + BUTTON_LONG_PRESS:
-            self.log('POWER OFF PRESS, check long press')
-            self.turn_hold('off')
-        elif button_event == self.POWER_OFF + BUTTON_LONG_RELEASE:
-            self.log('POWER OFF LONG RELEASE')
-
-
-class RemoteControlSelectLight(RemoteControlBase):
-    """Control lights on/off, brightness, together with selecting light to control.
-
-    Logics are built around the IKEA Trådfri remote control.
-    Selecting light with the arrows, selection reset to main light after 30 seconds.
-    Arguments:
-        remote -- slugified version of entity name.
-        light -- List of lights, first light is considered main device.
-    """
-
-    def handle_button_event(self):
-        """Triggers action based on what button event is received.
-
-        1001: Long press power button.
-        1002: Short press power button.
-        2001: Long press dim up button.
-        2002: Short press dim up button.
-        3001: Long press dim down button.
-        3002: Short press dim down button.
-        4001: Long press left arrow.
-        4002: Short press left arrow.
-        5001: Long press right arrow.
-        5002: Short press right arrow.
-        """
-
-        if self.button_event == 1001:  # Toggle main device on/off
-            self.toggle(self.lights[CONF_MAIN_DEVICE])
-
-        elif self.button_event == 1002:  # Toggle select device on/off
-            self.toggle(self.controlled_device)
-
-        elif self.button_event == 2001:  # Dim up to max
-            self.set_brightness_controlled_light(+255)
-
-        elif self.button_event == 2002:  # Dim up 25
-            self.set_brightness_controlled_light(+25)
-
-        elif self.button_event == 3001:  # Dim down to min
-            self.set_brightness_controlled_light(-255)
-
-        elif self.button_event == 3002:  # Dim down 25
-            self.set_brightness_controlled_light(-25)
-
-        elif self.button_event in [4001, 5001]:  # Go back to main device
-            self.select_main_device()
-
-        elif self.button_event == 4002:  # Select previous device
-            self.select_previous_device()
-
-        elif self.button_event == 5002:  # Select next device
-            self.select_next_device()
-
-
 class RemoteControlBase(hass.Hass):
     """[summary]
 
@@ -369,3 +208,148 @@ class RemoteControlBase(hass.Hass):
         if not button:
             return 0
         return int(button/1000)
+
+
+class RemoteControl(RemoteControlBase):
+    """"""
+
+    def initialize(self):
+        """"""
+        self.lights = ['light.ambience_spot_5']
+        super().initialize()
+
+    def handle_button_event(self):
+        """"""
+        if self.button_event == 1002:
+            self.log('Button on')
+        elif self.button_event == 2002:
+            self.log('Button dim up')
+        elif self.button_event == 3002:
+            self.log('Button dim down')
+        elif self.button_event == 4002:
+            self.log('Button off')
+
+
+class HueDimmer(RemoteControlBase):
+    """Example config.
+
+remote_control_living_room:
+  module: remote_control
+  class: HueDimmer
+  remotes:
+  long_press:
+  multi_click:
+    """
+
+    POWER_ON = BUTTON_1 * 1000
+    DIM_UP = BUTTON_2 * 1000
+    DIM_DOWN = BUTTON_3 * 1000
+    POWER_OFF = BUTTON_4 * 1000
+
+    # MAPPING = {
+    #     1
+    # }
+    # def initialize(self):
+    #     """"""
+    #     super().initialize()
+
+    def handle_button_event(self):
+        """"""
+        button_event = self.button_event
+
+        if button_event == self.POWER_ON + BUTTON_PRESS:
+            self.log('POWER ON PRESSED')
+        elif button_event == self.POWER_ON + BUTTON_RELEASE:
+            self.log('POWER ON RELEASED, check multi click')
+            self.turn_click('on')
+        elif button_event == self.POWER_ON + BUTTON_LONG_PRESS:
+            self.log('POWER ON LONG PRESS, check long press')
+            self.turn_hold('on')
+        elif button_event == self.POWER_ON + BUTTON_LONG_RELEASE:
+            self.log('POWER ON LONG RELEASE')
+
+        elif button_event == self.DIM_UP + BUTTON_PRESS:
+            self.log('DIM UP PRESSED')
+        elif button_event == self.DIM_UP + BUTTON_RELEASE:
+            self.log('DIM UP RELEASED, check multi click')
+            self.set_brightness_all_lights(+40)
+        elif button_event == self.DIM_UP + BUTTON_LONG_PRESS:
+            self.log('DIM UP LONG PRESS, check long press')
+            self.set_brightness_all_lights(+40)
+        elif button_event == self.DIM_UP + BUTTON_LONG_RELEASE:
+            self.log('DIM UP LONG RELEASE')
+
+        elif button_event == self.DIM_DOWN + BUTTON_PRESS:
+            self.log('DIM DOWN PRESSED')
+        elif button_event == self.DIM_DOWN + BUTTON_RELEASE:
+            self.log('DIM DOWN RELEASED, check multi click')
+            self.set_brightness_all_lights(-40)
+        elif button_event == self.DIM_DOWN + BUTTON_LONG_PRESS:
+            self.log('DIM DOWN LONG PRESS, check long press')
+            self.set_brightness_all_lights(-40)
+        elif button_event == self.DIM_DOWN + BUTTON_LONG_RELEASE:
+            self.log('DIM DOWN LONG RELEASE')
+
+        elif button_event == self.POWER_OFF + BUTTON_PRESS:
+            self.log('POWER OFF PRESSED')
+        elif button_event == self.POWER_OFF + BUTTON_RELEASE:
+            self.log('POWER OFF, check multi click')
+            self.turn_click('off')
+        elif button_event == self.POWER_OFF + BUTTON_LONG_PRESS:
+            self.log('POWER OFF PRESS, check long press')
+            self.turn_hold('off')
+        elif button_event == self.POWER_OFF + BUTTON_LONG_RELEASE:
+            self.log('POWER OFF LONG RELEASE')
+
+
+class RemoteControlSelectLight(RemoteControlBase):
+    """Control lights on/off, brightness, together with selecting light to control.
+
+    Logics are built around the IKEA Trådfri remote control.
+    Selecting light with the arrows, selection reset to main light after 30 seconds.
+    Arguments:
+        remote -- slugified version of entity name.
+        light -- List of lights, first light is considered main device.
+    """
+
+    def handle_button_event(self):
+        """Triggers action based on what button event is received.
+
+        1001: Long press power button.
+        1002: Short press power button.
+        2001: Long press dim up button.
+        2002: Short press dim up button.
+        3001: Long press dim down button.
+        3002: Short press dim down button.
+        4001: Long press left arrow.
+        4002: Short press left arrow.
+        5001: Long press right arrow.
+        5002: Short press right arrow.
+        """
+
+        if self.button_event == 1001:  # Toggle main device on/off
+            self.toggle(self.lights[CONF_MAIN_DEVICE])
+
+        elif self.button_event == 1002:  # Toggle select device on/off
+            self.toggle(self.controlled_device)
+
+        elif self.button_event == 2001:  # Dim up to max
+            self.set_brightness_controlled_light(+255)
+
+        elif self.button_event == 2002:  # Dim up 25
+            self.set_brightness_controlled_light(+25)
+
+        elif self.button_event == 3001:  # Dim down to min
+            self.set_brightness_controlled_light(-255)
+
+        elif self.button_event == 3002:  # Dim down 25
+            self.set_brightness_controlled_light(-25)
+
+        elif self.button_event in [4001, 5001]:  # Go back to main device
+            self.select_main_device()
+
+        elif self.button_event == 4002:  # Select previous device
+            self.select_previous_device()
+
+        elif self.button_event == 5002:  # Select next device
+            self.select_next_device()
