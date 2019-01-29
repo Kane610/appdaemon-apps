@@ -233,12 +233,28 @@ class RemoteControl(RemoteControlBase):
 class HueDimmer(RemoteControlBase):
     """Example config.
 
-remote_control_living_room:
-  module: remote_control
-  class: HueDimmer
-  remotes:
-  long_press:
-  multi_click:
+    remote_control_living_room:
+      module: remote_control
+      class: HueDimmer
+      remotes:
+        - hue_dimmer_1
+        - hue_dimmer_2
+      hold:
+        1:
+        - light.1
+        - light.2
+        3:
+        - light.3
+        - light.4
+      click:
+        1:
+        - light.5
+        - light.6
+        2:
+        - light.7
+        - light.8
+        3:
+        - light.9
     """
 
     POWER_ON = BUTTON_1 * 1000
