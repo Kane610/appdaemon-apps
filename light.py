@@ -67,7 +67,7 @@ class Light:
         self.appdaemon.listen_state(self.update, self.entity_id)
 
     def update(self, entity, attribute, old, new, kwargs) -> None:
-        self.raw = self.appdaemon.get_state(entity=self.entity_id, attribute="all")
+        self.raw = self.appdaemon.get_state(entity_id=self.entity_id, attribute="all")
 
         if new == "on":
             self._attributes = self.raw["attributes"]
@@ -124,7 +124,7 @@ class Light:
     def flash(self) -> None:
         self.call_service("turn_on", self._context, flash="short")
 
-    def store_state(self, context: IntEnum) -> None:
+    def store_state(self, context: IntEnum, app_id: str) -> None:
         if not self.evaluate_context(context):
             return
 
@@ -133,26 +133,25 @@ class Light:
             return
 
         self._snapshot = {
-            "state": self.state,
-            "context": self._context,
-            "brightness": self.attributes.get("brightness"),
-            "color_temp": self.attributes.get("color_temp"),
+            app_id: {
+                "state": self.state,
+                "context": self._context,
+                "brightness": self.attributes.get("brightness"),
+                "color_temp": self.attributes.get("color_temp"),
+            }
         }
 
-    def restore_state(self, context: IntEnum) -> None:
-        if not self.evaluate_context(context):
+    def restore_state(self, context: IntEnum, app_id: str) -> None:
+        if not self.evaluate_context(context) or app_id not in self._snapshot:
             return
 
-        if not self._snapshot:
-            self.appdaemon.log("Snapshot empty")
-            return
-
-        self._context = self._snapshot.pop("context")
+        snapshot = self._snapshot.pop(app_id)
+        self._context = snapshot["context"]
         self.call_service(
-            f'turn_{self._snapshot.pop("state")}',
+            f'turn_{snapshot["state"]}',
             self._context,
-            brightness=self._snapshot.pop("brightness"),
-            color_temp=self._snapshot.pop("color_temp"),
+            brightness=snapshot["brightness"],
+            color_temp=snapshot["color_temp"],
         )
 
     @property
