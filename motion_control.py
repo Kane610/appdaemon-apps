@@ -2,8 +2,6 @@
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from light import Context
-
 
 class MotionControlLights(hass.Hass):
     """Motion control lights.
@@ -32,7 +30,7 @@ class MotionControlLights(hass.Hass):
         self.restore_light_handle = None
         self.listen_state(self.motion, self.args["sensor"])
 
-        self.motion("test", "", "off", "on", "")
+        # self.motion("test", "", "off", "on", "")
 
         self.log("Initialized")
 
@@ -52,13 +50,13 @@ class MotionControlLights(hass.Hass):
     def light_on(self):
         """Turn lights on."""
         for light in self.lights.values():
-            light.store_state(Context.automatic_trigger, self.name)
-            light.turn_on(Context.automatic_trigger)
+            light.store_state(self.delay)
+            light.turn_on()
 
     def restore(self, kwargs):
         """Restore lights."""
         for light in self.lights.values():
-            light.restore_state(Context.automatic_trigger, self.name)
+            light.restore_state()
 
     def within_limits(self):
         """Check that light level sensors are within limits."""

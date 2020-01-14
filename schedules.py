@@ -1,7 +1,5 @@
 import appdaemon.plugins.hass.hassapi as hass
 
-from light import Context
-
 ###
 # Appdaemon light schedules App
 #
@@ -59,7 +57,7 @@ class lighting(hass.Hass):
             return
 
         for light in self.lights.values():
-            light.call_service(f"turn_{action}", Context.scheduled_trigger)
+            light.call_service(f"turn_{action}")
 
         self.log("Turned {} {}".format(action, self.lights))
 

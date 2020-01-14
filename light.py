@@ -1,6 +1,6 @@
 import appdaemon.plugins.hass.hassapi as hass
 
-from enum import IntEnum
+from datetime import datetime, timedelta
 import json
 
 #
@@ -10,14 +10,14 @@ import json
 #
 
 
-class Context(IntEnum):
-    force_majeur = 5
-    unknown_trigger = 4
-    manual_override = 3
-    automatic_trigger = 2
-    scheduled_trigger = 1
-    initial_state = 0
-
+# context -> operational_state
+# Normal, temporary override, manual override
+#
+# store with time stamp
+# store original state?
+# motion detection - on and restore a set or accumulated amount of time
+# play movie - on and restore during play/pause/done
+# allow restoring to original state?
 
 TIME_RESET_CONTROL = "04:00:00"
 
@@ -34,7 +34,6 @@ class Lights(hass.Hass):
             entity_id: Light(light, self) for entity_id, light in lights.items()
         }
 
-        self.run_daily(self._reset_control, self.parse_time(TIME_RESET_CONTROL))
         self.log("Initialized")
 
     def get(self, *, entity_id: str = None, entity_ids: list = None) -> dict:
@@ -50,19 +49,13 @@ class Lights(hass.Hass):
 
         return dict(self.lights)
 
-    def _reset_control(self):
-        """Reset manual override control."""
-        for light in self.lights:
-            light.reset_context()
-
 
 class Light:
     def __init__(self, light: dict, appdaemon: Lights) -> None:
         self.raw = light
         self.appdaemon = appdaemon
         self._attributes = light.get("attributes", {})
-        self._context = Context.initial_state
-        self._snapshot = {}
+        self._snapshot = None
 
         self.appdaemon.listen_state(self.update, self.entity_id)
 
@@ -72,32 +65,14 @@ class Light:
         if new == "on":
             self._attributes = self.raw["attributes"]
 
-    def reset_context(self) -> None:
-        self._context = Context.initial_state
-
-    def evaluate_context(self, context: IntEnum) -> bool:
-        """Evaluate if context is ok to pass."""
-        if context < self._context:
-            self.appdaemon.log(
-                "Light controlled on higher prio {context} < {self.context}"
-            )
-            return False
-        return True
-
     def call_service(
         self,
         service: str,
-        context: IntEnum,
         brightness: int = None,
         color_temp: int = None,
         flash: str = None,
     ) -> None:
-
-        print(f"{self.entity_id} {self.state}, {service} {context}>={self._context}")
-        if self.state != "off" and not self.evaluate_context(context):
-            self.appdaemon.log(f"{self.entity_id} not allowed to change")
-            return
-
+        print(f"{self.entity_id} {self.state}, {service}")
         kwargs = {}
 
         if service != "turn_off":
@@ -113,46 +88,41 @@ class Light:
         self.appdaemon.call_service(
             f"light/{service}", entity_id=self.entity_id, **kwargs
         )
-        self._context = context
 
-    def turn_on(self, context: IntEnum, **kwargs) -> None:
-        self.call_service("turn_on", context, **kwargs)
+    def turn_on(self, **kwargs) -> None:
+        self.call_service("turn_on", **kwargs)
 
-    def turn_off(self, context: IntEnum, **kwargs) -> None:
-        self.call_service("turn_off", context, **kwargs)
+    def turn_off(self, **kwargs) -> None:
+        self.call_service("turn_off", **kwargs)
 
     def flash(self) -> None:
-        self.call_service("turn_on", self._context, flash="short")
+        self.call_service("turn_on", flash="short")
 
-    def store_state(self, context: IntEnum, app_id: str) -> None:
-        if not self.evaluate_context(context):
-            return
-
+    def store_state(self, delay: int) -> None:
         if self.state not in ("on", "off"):
             self.appdaemon.log("Light in bad state {self.state}")
             return
 
-        self._snapshot = {
-            app_id: {
-                "state": self.state,
-                "context": self._context,
-                "brightness": self.attributes.get("brightness"),
-                "color_temp": self.attributes.get("color_temp"),
-            }
+        snapshot_data = {
+            "state": self.state,
+            "brightness": self.attributes.get("brightness"),
+            "color_temp": self.attributes.get("color_temp"),
         }
+        target_time = datetime.now() + timedelta(seconds=delay)
+        if self._snapshot and self._snapshot < target_time:
+            snapshot_data = self._snapshot.data
+        self._snapshot = snapshot(snapshot_data, target_time)
 
-    def restore_state(self, context: IntEnum, app_id: str) -> None:
-        if not self.evaluate_context(context) or app_id not in self._snapshot:
-            return
-
-        snapshot = self._snapshot.pop(app_id)
-        self._context = snapshot["context"]
+    def restore_state(self) -> None:
         self.call_service(
-            f'turn_{snapshot["state"]}',
-            self._context,
-            brightness=snapshot["brightness"],
-            color_temp=snapshot["color_temp"],
+            f'turn_{self._snapshot.data["state"]}',
+            brightness=self._snapshot.data["brightness"],
+            color_temp=self._snapshot.data["color_temp"],
         )
+        self._snapshot = None
+
+    def clear_snapshot(self) -> None:
+        self._snapshot = None
 
     @property
     def entity_id(self) -> str:
@@ -179,7 +149,56 @@ class Light:
         return self.raw["last_updated"]
 
     def __repr__(self) -> str:
-        return f"{json.dumps(self.raw)}, light context: {self._context}"
+        return f"{json.dumps(self.raw)}"
 
     def __str__(self) -> str:
         return f"{self.entity_id} {self.state}"
+
+
+class snapshot:
+    def __init__(self, data: object, target_time: datetime) -> bool:
+        print(data, target_time)
+        self.data = data
+        self._target_time = target_time
+
+    def __eq__(self, other: datetime) -> bool:
+        return self._target_time == other
+
+    def __lt__(self, other: datetime) -> bool:
+        return self._target_time < other
+
+
+# class snapshot_manager:
+#     def __init__(self):
+#         self._snapshots = {}
+
+#     def store(self, id: str, data: object, target_time: datetime) -> None:
+#         if id in self._snapshots and self._snapshot[id] < target_time:
+#             data = self._snapshot[id].data
+#         self._snapshots[id] = snapshot(data, target_time)
+
+#     def restore(self, id: str) -> object:
+#         if not self._snapshots:
+#             return
+
+#         if len(self._snapshots) == 1:
+#             return self._snapshots.pop(id).data
+
+#         snapshot = self._snapshots.pop(id)
+
+#         data = snapshot.data
+#         for item in self._snapshots.values():
+#             if snapshot < item:
+#                 next_data = item.data
+#                 item.data = data
+#                 data = next_data
+
+#     def remove(self, id: str) -> None:
+#         try:
+#             del self._snapshots[id]
+#         except KeyError:
+#             pass
+
+
+# https://docs.python.org/3/reference/datamodel.html#emulating-container-types
+

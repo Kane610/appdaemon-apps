@@ -2,8 +2,6 @@
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from light import Context
-
 CONF_MAIN_DEVICE = 0
 CONF_MAX_BRIGHTNESS = 255
 CONF_MIN_BRIGHTNESS = 1
@@ -128,7 +126,7 @@ class RemoteControlBase(hass.Hass):
 
         for device in device_dict[button_counter]:
             light = self.lights[device]
-            light.call_service(f"turn_{action}", Context.manual_override)
+            light.call_service(f"turn_{action}")
 
         self.log(f"Turn {action} device {device_dict[button_counter]}")
 
@@ -162,7 +160,7 @@ class RemoteControlBase(hass.Hass):
         elif brightness < CONF_MIN_BRIGHTNESS:
             brightness = CONF_MIN_BRIGHTNESS
 
-        light.turn_on(Context.manual_override, brightness=brightness)
+        light.turn_on(brightness=brightness)
 
         self.log(f"Setting brightness to {brightness}")
 
