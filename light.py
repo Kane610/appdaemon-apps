@@ -118,7 +118,7 @@ class Light:
     def toggle(self, **kwargs) -> None:
         self.appdaemon.toggle(entity_id=self.entity_id, **kwargs)
 
-    def store_state(self, delay: int) -> None:
+    def store_state(self, app_name: str, delay: int) -> None:
         if self.state not in ("on", "off"):
             self.appdaemon.log("Light in bad state {self.state}")
             return
@@ -131,15 +131,16 @@ class Light:
         target_time = datetime.now() + timedelta(seconds=delay)
         if self._snapshot and self._snapshot < target_time:
             snapshot_data = self._snapshot.data
-        self._snapshot = snapshot(snapshot_data, target_time)
+        self._snapshot = snapshot(app_name, snapshot_data, target_time)
 
-    def restore_state(self) -> None:
-        self.call_service(
-            f"turn_{self._snapshot.data[ATTR_STATE]}",
-            brightness=self._snapshot.data[ATTR_BRIGHTNESS],
-            color_temp=self._snapshot.data[ATTR_COLOR_TEMP],
-        )
-        self._snapshot = None
+    def restore_state(self, app_name: str) -> None:
+        if self._snapshot.app_name == app_name:
+            self.call_service(
+                f"turn_{self._snapshot.data[ATTR_STATE]}",
+                brightness=self._snapshot.data[ATTR_BRIGHTNESS],
+                color_temp=self._snapshot.data[ATTR_COLOR_TEMP],
+            )
+            self._snapshot = None
 
     def clear_snapshot(self) -> None:
         self._snapshot = None
@@ -176,8 +177,8 @@ class Light:
 
 
 class snapshot:
-    def __init__(self, data: object, target_time: datetime) -> bool:
-        print(data, target_time)
+    def __init__(self, app_name: str, data: object, target_time: datetime) -> bool:
+        self.app_name = app_name
         self.data = data
         self._target_time = target_time
 

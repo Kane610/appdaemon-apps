@@ -50,13 +50,13 @@ class MotionControlLights(hass.Hass):
     def light_on(self):
         """Turn lights on."""
         for light in self.lights.values():
-            light.store_state(self.delay)
+            light.store_state(self.name, self.delay)
             light.turn_on()
 
     def restore(self, kwargs):
         """Restore lights."""
         for light in self.lights.values():
-            light.restore_state()
+            light.restore_state(self.name)
 
     def within_limits(self):
         """Check that light level sensors are within limits."""
