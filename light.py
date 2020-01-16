@@ -115,6 +115,9 @@ class Light:
     def flash(self) -> None:
         self.call_service(ATTR_TURN_ON, flash=ATTR_FLASH_SHORT)
 
+    def toggle(self, **kwargs) -> None:
+        self.appdaemon.toggle(entity_id=self.entity_id, **kwargs)
+
     def store_state(self, delay: int) -> None:
         if self.state not in ("on", "off"):
             self.appdaemon.log("Light in bad state {self.state}")

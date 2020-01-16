@@ -338,10 +338,12 @@ class RemoteControlSelectLight(RemoteControlBase):
         """
 
         if self.button_event == 1001:  # Toggle main device on/off
-            self.toggle(self.lights[CONF_MAIN_DEVICE])
+            # self.toggle(self.lights[CONF_MAIN_DEVICE])
+            self.lights[CONF_MAIN_DEVICE].toggle()
 
         elif self.button_event == 1002:  # Toggle select device on/off
-            self.toggle(self.controlled_device)
+            # self.toggle(self.controlled_device)
+            self.controlled_device.toggle()
 
         elif self.button_event == 2001:  # Dim up to max
             self.set_brightness_controlled_light(+255)
