@@ -19,11 +19,21 @@ import json
 # play movie - on and restore during play/pause/done
 # allow restoring to original state?
 
+ATTR_ATTRIBUTES = "attributes"
+ATTR_BRIGHTNESS = "brightness"
+ATTR_COLOR_TEMP = "color_temp"
+ATTR_FLASH = "flash"
+ATTR_FLASH_SHORT = "short"
+ATTR_STATE = "state"
+ATTR_TURN_OFF = "turn_off"
+ATTR_TURN_ON = "turn_on"
+
 TIME_RESET_CONTROL = "04:00:00"
 
 CONFIGURED_TIME_WINDOWS_OF_LIGHTING_SCENE = {
-    "05:00:00": {"brightness": 100, "ambience": 50},
-    "10:00:00": {"brightness": 255, "ambience": 30},
+    "05:00:00": {ATTR_BRIGHTNESS: 100, ATTR_COLOR_TEMP: 50},
+    "10:00:00": {ATTR_BRIGHTNESS: 255, ATTR_COLOR_TEMP: 30},
+    "21:37:30": {ATTR_BRIGHTNESS: 255, ATTR_COLOR_TEMP: 30},
 }
 
 
@@ -34,7 +44,14 @@ class Lights(hass.Hass):
             entity_id: Light(light, self) for entity_id, light in lights.items()
         }
 
+        # for time, kwargs in CONFIGURED_TIME_WINDOWS_OF_LIGHTING_SCENE.items():
+        #     self.run_daily(self.circadian_time, time, **kwargs)
+
         self.log("Initialized")
+
+    def circadian_time(self, kwargs):
+        # print("CIRCADIAN", kwargs)
+        pass
 
     def get(self, *, entity_id: str = None, entity_ids: list = None) -> dict:
         if entity_id:
@@ -54,7 +71,7 @@ class Light:
     def __init__(self, light: dict, appdaemon: Lights) -> None:
         self.raw = light
         self.appdaemon = appdaemon
-        self._attributes = light.get("attributes", {})
+        self._attributes = light.get(ATTR_ATTRIBUTES, {})
         self._snapshot = None
 
         self.appdaemon.listen_state(self.update, self.entity_id)
@@ -63,7 +80,7 @@ class Light:
         self.raw = self.appdaemon.get_state(entity_id=self.entity_id, attribute="all")
 
         if new == "on":
-            self._attributes = self.raw["attributes"]
+            self._attributes = self.raw[ATTR_ATTRIBUTES]
 
     def call_service(
         self,
@@ -75,28 +92,28 @@ class Light:
         print(f"{self.entity_id} {self.state}, {service}")
         kwargs = {}
 
-        if service != "turn_off":
+        if service != ATTR_TURN_OFF:
             if brightness:
-                kwargs["brightness"] = brightness
+                kwargs[ATTR_BRIGHTNESS] = brightness
 
             if color_temp:
-                kwargs["color_temp"] = color_temp
+                kwargs[ATTR_COLOR_TEMP] = color_temp
 
             if flash:
-                kwargs["flash"] = flash
+                kwargs[ATTR_FLASH] = flash
 
         self.appdaemon.call_service(
             f"light/{service}", entity_id=self.entity_id, **kwargs
         )
 
     def turn_on(self, **kwargs) -> None:
-        self.call_service("turn_on", **kwargs)
+        self.call_service(ATTR_TURN_ON, **kwargs)
 
     def turn_off(self, **kwargs) -> None:
-        self.call_service("turn_off", **kwargs)
+        self.call_service(ATTR_TURN_OFF, **kwargs)
 
     def flash(self) -> None:
-        self.call_service("turn_on", flash="short")
+        self.call_service(ATTR_TURN_ON, flash=ATTR_FLASH_SHORT)
 
     def store_state(self, delay: int) -> None:
         if self.state not in ("on", "off"):
@@ -104,9 +121,9 @@ class Light:
             return
 
         snapshot_data = {
-            "state": self.state,
-            "brightness": self.attributes.get("brightness"),
-            "color_temp": self.attributes.get("color_temp"),
+            ATTR_STATE: self.state,
+            ATTR_BRIGHTNESS: self.attributes.get(ATTR_BRIGHTNESS),
+            ATTR_COLOR_TEMP: self.attributes.get(ATTR_COLOR_TEMP),
         }
         target_time = datetime.now() + timedelta(seconds=delay)
         if self._snapshot and self._snapshot < target_time:
@@ -115,9 +132,9 @@ class Light:
 
     def restore_state(self) -> None:
         self.call_service(
-            f'turn_{self._snapshot.data["state"]}',
-            brightness=self._snapshot.data["brightness"],
-            color_temp=self._snapshot.data["color_temp"],
+            f"turn_{self._snapshot.data[ATTR_STATE]}",
+            brightness=self._snapshot.data[ATTR_BRIGHTNESS],
+            color_temp=self._snapshot.data[ATTR_COLOR_TEMP],
         )
         self._snapshot = None
 
@@ -130,7 +147,7 @@ class Light:
 
     @property
     def state(self) -> str:
-        return self.raw["state"]
+        return self.raw[ATTR_STATE]
 
     @property
     def attributes(self) -> dict:
