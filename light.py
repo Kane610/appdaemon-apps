@@ -59,9 +59,9 @@ class Lights(hass.Hass):
 
         if entity_ids:
             return {
-                entity_id: light
-                for entity_id, light in self.lights.items()
-                if entity_id in entity_ids
+                entity_id: self.lights[entity_id]
+                for entity_id in entity_ids
+                if entity_id in self.lights
             }
 
         return dict(self.lights)
@@ -118,7 +118,7 @@ class Light:
     def toggle(self, **kwargs) -> None:
         self.appdaemon.toggle(entity_id=self.entity_id, **kwargs)
 
-    def store_state(self, app_name: str, delay: int) -> None:
+    def store_state(self, app_id: str, delay: int) -> None:
         if self.state not in ("on", "off"):
             self.appdaemon.log("Light in bad state {self.state}")
             return
@@ -131,10 +131,11 @@ class Light:
         target_time = datetime.now() + timedelta(seconds=delay)
         if self._snapshot and self._snapshot < target_time:
             snapshot_data = self._snapshot.data
-        self._snapshot = snapshot(app_name, snapshot_data, target_time)
+        self._snapshot = snapshot(app_id, snapshot_data, target_time)
+        self.appdaemon.log(f"Create snapshot {self.entity_id} {self._snapshot}")
 
-    def restore_state(self, app_name: str) -> None:
-        if self._snapshot.app_name == app_name:
+    def restore_state(self, app_id: str) -> None:
+        if self._snapshot.app_id == app_id:
             self.call_service(
                 f"turn_{self._snapshot.data[ATTR_STATE]}",
                 brightness=self._snapshot.data[ATTR_BRIGHTNESS],
@@ -177,8 +178,8 @@ class Light:
 
 
 class snapshot:
-    def __init__(self, app_name: str, data: object, target_time: datetime) -> bool:
-        self.app_name = app_name
+    def __init__(self, app_id: str, data: object, target_time: datetime) -> bool:
+        self.app_id = app_id
         self.data = data
         self._target_time = target_time
 
@@ -187,6 +188,9 @@ class snapshot:
 
     def __lt__(self, other: datetime) -> bool:
         return self._target_time < other
+
+    def __str__(self) -> str:
+        return f"{self.app_id} {self.data} {self._target_time}"
 
 
 # class snapshot_manager:
