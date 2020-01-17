@@ -15,56 +15,48 @@ class MotionControlLights(hass.Hass):
         lightlevel {dict} -- Keys is max light level and value is sensor
     """
 
-
     def initialize(self):
         """Set up delay, sensor and lights"""
-        self.delay = self.args.get('delay', 90)
-        self.sensor = self.args.get('sensor')
-        self.lights = self.args.get('light')
-        self.lightlevel = self.args.get('lightlevel', {})
-        if not all([self.sensor, self.lights]):
-            self.log('All configuration parameters are not set')
+        if "light" not in self.args and "sensor" not in self.args:
+            self.log("All configuration parameters are not set")
             return False
-        self.lights_to_turn_off = []
-        self.light_off_handle = None
-        self.light_override_handle = {}
-        self.listen_state(self.motion, self.sensor)
+
+        self.delay = self.args.get("delay", 90)
+        self.lightlevel = self.args.get("lightlevel", {})
+
+        light_master = self.get_app("light_master")
+        self.lights = light_master.get(entity_ids=self.args["light"])
+
+        self.restore_light_handle = None
+        self.listen_state(self.motion, self.args["sensor"])
+
+        # self.motion("test", "", "off", "on", "")
+
+        self.log("Initialized")
 
     def motion(self, entity, attribute, old, new, kwargs):
         """"""
-        if new == 'on':
-            self.log("{} triggered".format(entity))
-            if not self.lights_to_turn_off and self.within_limits():  # Motion is already active
+        if new == "on":
+            self.log(f"{entity} triggered")
+
+            if self.within_limits():  # Motion is already active
                 self.light_on()
-            if self.light_off_handle is not None:
-                self.cancel_timer(self.light_off_handle)
-            if self.lights_to_turn_off:  # Don't run lights off if no lights to turn off
-                self.light_off_handle = self.run_in(self.light_off, self.delay)
+
+            if self.restore_light_handle is not None:
+                self.cancel_timer(self.restore_light_handle)
+
+            self.restore_light_handle = self.run_in(self.restore, self.delay)
 
     def light_on(self):
-        """Turn lights on.
+        """Turn lights on."""
+        for light in self.lights.values():
+            light.store_state(self.name, self.delay)
+            light.turn_on()
 
-        Store which lights where turned on.
-        """
-        for light in self.lights:
-            state = self.get_state(light)
-            if state == 'off':
-                self.lights_to_turn_off.append(light)
-                self.turn_on(light)
-        self.log("Turning on {}".format(self.lights_to_turn_off))
-
-    def light_off(self, kwargs):
-        """Turn lights off.
-
-        Only turn lights off which hasn't been changed after motion turned it on.
-        """
-        for light in self.lights_to_turn_off:
-            last_updated = self.get_state(light, attribute='last_updated')  # Any change
-            last_changed = self.get_state(light, attribute='last_changed')  # State change
-            if last_changed == last_updated:
-                self.log('Turning off {}'.format(light))
-                self.turn_off(light)
-        self.lights_to_turn_off = []
+    def restore(self, kwargs):
+        """Restore lights."""
+        for light in self.lights.values():
+            light.restore_state(self.name)
 
     def within_limits(self):
         """Check that light level sensors are within limits."""
@@ -74,7 +66,7 @@ class MotionControlLights(hass.Hass):
             current_lightlevel = float(self.get_state(lux_sensor))
             if current_lightlevel > limit:
                 within_limit = False
-                self.log('Light level beyond limit')
+                self.log("Light level beyond limit")
                 break
 
         return within_limit
